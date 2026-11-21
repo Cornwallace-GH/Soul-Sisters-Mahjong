@@ -4,4 +4,4 @@ Website for Soul Sisters Mahjong, beginner American Mahjong lessons in Rockwall,
 
 One file: `index.html` (Home, Lessons, About, Contact).
 
-Still to add: official logo, photos, Calendly link (CALENDLY_URL near the bottom of index.html), confirmed prices, contact email.
+Still to add: photos, Calendly link (CALENDLY_URL near the bottom of index.html), confirmed prices, contact email.

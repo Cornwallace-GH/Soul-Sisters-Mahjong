@@ -43,6 +43,9 @@ a{color:var(--deep-teal)}
 header{position:sticky;top:0;z-index:20;background:var(--cream);border-bottom:1px solid rgba(178,138,74,.35)}
 .bar{display:flex;align-items:center;justify-content:space-between;height:68px}
 .logo-slot{display:flex;align-items:center;justify-content:center;height:46px;padding:0 .9rem;border:1.5px dashed var(--gold);border-radius:10px;font-size:.7rem;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--gold);text-decoration:none;white-space:nowrap}
+.brand{display:flex;align-items:center;gap:.5rem;text-decoration:none}
+.brand-icon{height:46px;width:auto;display:block}
+.brand-word{height:36px;width:auto;display:block}
 .menu-btn{width:48px;height:48px;border:0;background:none;cursor:pointer;display:flex;flex-direction:column;justify-content:center;align-items:center;gap:5px}
 .menu-btn span{display:block;width:24px;height:2px;background:var(--deep-teal);transition:.2s}
 .menu-btn[aria-expanded="true"] span:nth-child(1){transform:translateY(7px) rotate(45deg)}
@@ -99,6 +102,8 @@ input:focus,select:focus,textarea:focus{border-color:var(--deep-teal);outline:no
 
 /* Footer */
 footer{background:var(--deep-teal);color:var(--cream);padding:2.5rem 0 6rem;font-size:.9rem}
+.foot-icon{display:inline-block;background:var(--cream);border-radius:9px;line-height:0;margin-bottom:1rem}
+.foot-icon img{height:68px;width:auto}
 footer .tag{font-family:var(--serif);font-size:1.4rem;color:var(--blush);margin-bottom:.5rem}
 footer a{color:var(--cream)}
 footer .fine{margin-top:1.5rem;padding-top:1rem;border-top:1px solid rgba(178,138,74,.5);opacity:.85;font-size:.8rem}
@@ -112,6 +117,7 @@ footer .fine{margin-top:1.5rem;padding-top:1rem;border-top:1px solid rgba(178,13
 
 /* Tablet / desktop */
 @media (min-width:760px){
+  .brand-word{height:44px}
   h1{font-size:4rem}
   h2{font-size:2.75rem}
   section{padding:4.5rem 0}
@@ -135,7 +141,7 @@ footer .fine{margin-top:1.5rem;padding-top:1rem;border-top:1px solid rgba(178,13
 
 <header>
   <div class="wrap bar">
-    <a href="#home" class="logo-slot" aria-label="Soul Sisters Mahjong home">Official logo here</a>
+    <a href="#home" class="brand" aria-label="Soul Sisters Mahjong home"><img src="assets/ssm-icon.png" alt="" class="brand-icon" width="142" height="240"><img src="assets/ssm-wordmark.png" alt="Soul Sisters Mahjong" class="brand-word" width="900" height="241"></a>
     <button class="menu-btn" aria-expanded="false" aria-controls="nav" aria-label="Open menu"><span></span><span></span><span></span></button>
     <nav id="nav" aria-label="Main">
       <ul>
@@ -378,6 +384,7 @@ footer .fine{margin-top:1.5rem;padding-top:1rem;border-top:1px solid rgba(178,13
 <footer>
   <div class="wrap grid grid-3">
     <div>
+      <span class="foot-icon"><img src="assets/ssm-icon.png" alt="" width="142" height="240"></span>
       <p class="tag">Mahjong &bull; Sisterhood &bull; Connection</p>
       <p>Rockwall, Texas</p>
     </div>
