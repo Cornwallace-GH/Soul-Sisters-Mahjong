@@ -23,6 +23,7 @@ h1{font-size:2.6rem}
 h2{font-size:2rem;margin-bottom:.75rem}
 h3{font-size:1.5rem;margin-bottom:.4rem}
 p+p{margin-top:1rem}
+main p{max-width:65ch}
 a{color:var(--deep-teal)}
 :focus-visible{outline:3px solid var(--terracotta);outline-offset:3px;border-radius:4px}
 .wrap{max-width:var(--max);margin:0 auto;padding:0 1.25rem}
@@ -61,11 +62,11 @@ nav ul{list-style:none}
 /* Waves */
 .wave{display:block;width:100%;height:auto}
 .hero{position:relative;overflow:hidden;background:var(--cream)}
-.hero-inner{position:relative;z-index:1;padding:2.5rem 0 1rem}
+.hero-inner{position:relative;z-index:1;padding-top:2.5rem;padding-bottom:1rem}
 .hero h1{max-width:14ch}
 .hero .sub{font-size:1.05rem;max-width:36rem;margin-top:1rem}
 .wave-top{position:absolute;top:0;right:0;width:85%;max-width:620px;pointer-events:none}
-.page-hero{padding:2.5rem 0 1.5rem}
+.page-hero{padding-top:2.5rem;padding-bottom:1.5rem}
 .page-hero .sub{max-width:38rem;margin-top:.75rem}
 
 /* Sections */
@@ -105,7 +106,9 @@ footer{background:var(--deep-teal);color:var(--cream);padding:2.5rem 0 6rem;font
 .foot-icon{display:inline-block;background:var(--cream);border-radius:9px;line-height:0;margin-bottom:1rem}
 .foot-icon img{height:68px;width:auto}
 footer .tag{font-family:var(--serif);font-size:1.4rem;color:var(--blush);margin-bottom:.5rem}
-footer a{color:var(--cream)}
+footer a{color:var(--cream);display:inline-flex;align-items:center;min-height:44px}
+footer p br{display:none}
+footer .links{display:flex;flex-direction:column}
 footer .fine{margin-top:1.5rem;padding-top:1rem;border-top:1px solid rgba(178,138,74,.5);opacity:.85;font-size:.8rem}
 
 /* Sticky mobile CTA */
@@ -118,18 +121,20 @@ footer .fine{margin-top:1.5rem;padding-top:1rem;border-top:1px solid rgba(178,13
 /* Tablet / desktop */
 @media (min-width:760px){
   .brand-word{height:44px}
+  body{font-size:17px}
   h1{font-size:4rem}
   h2{font-size:2.75rem}
   section{padding:4.5rem 0}
-  .hero-inner{padding:4.5rem 0 2rem}
+  .hero-inner{padding-top:4.5rem;padding-bottom:2rem}
+  .hero h1{max-width:17ch}
   .grid-2{grid-template-columns:1fr 1fr}
   .grid-3{grid-template-columns:repeat(3,1fr)}
   .split{grid-template-columns:1.1fr .9fr;align-items:center;gap:3rem}
   .menu-btn{display:none}
   #nav{display:block;position:static;padding:0;border:0;background:none}
   #nav ul{display:flex;align-items:center;gap:1.75rem}
-  #nav a{border:0;padding:.25rem 0;font-size:.92rem}
-  #nav .btn{margin:0;width:auto;padding:.6rem 1.25rem;min-height:42px}
+  #nav a{border:0;padding:0;font-size:.92rem;min-height:44px;display:flex;align-items:center}
+  #nav .btn{margin:0;width:auto;padding:.6rem 1.25rem;min-height:46px;justify-content:center}
   .sticky-cta{display:none}
   footer{padding-bottom:2.5rem}
   .form-2{grid-template-columns:1fr 1fr}
@@ -389,7 +394,7 @@ footer .fine{margin-top:1.5rem;padding-top:1rem;border-top:1px solid rgba(178,13
       <p>Rockwall, Texas</p>
     </div>
     <div>
-      <p><a href="#lessons">Lessons</a><br><a href="#about">About</a><br><a href="#contact">Contact</a></p>
+      <p class="links"><a href="#lessons">Lessons</a><a href="#about">About</a><a href="#contact">Contact</a></p>
     </div>
     <div>
       <p>Email and social links coming soon.</p>
