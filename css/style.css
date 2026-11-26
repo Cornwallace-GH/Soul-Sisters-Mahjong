@@ -207,3 +207,41 @@ form .btn{justify-self:start}
   .hero-photo-layout .hero-inner{margin-top:0;padding-top:6.5rem;padding-bottom:6.5rem}
   .hero-photo-layout .hero-inner > *{max-width:560px}
 }
+
+/* ---------- Centered layout: headings, intros, cards, lists, buttons ---------- */
+.page-head{text-align:center}
+.page-head .lead{margin-left:auto;margin-right:auto}
+.page-head .rule{margin-left:auto;margin-right:auto}
+main section > .wrap > h2{text-align:center}
+main section > .wrap > h2 + p,main section > .wrap > h2 + .rule + p{text-align:center;margin-left:auto;margin-right:auto}
+main section > .wrap > .rule{margin-left:auto;margin-right:auto}
+main section > .wrap > .btn-row,main section > .wrap > div > .btn-row:last-child{justify-content:center}
+.card{text-align:center}
+.card .btn-row{justify-content:center}
+.card .checks{display:inline-block;text-align:left}
+.wrap > .facts{max-width:40rem;margin-left:auto;margin-right:auto;text-align:center}
+.steps{max-width:38rem;margin-left:auto;margin-right:auto}
+details{max-width:44rem;margin-left:auto;margin-right:auto}
+.disclosure{max-width:34em;margin-left:auto;margin-right:auto;text-align:center;border-left:0;border-top:3px solid var(--gold)}
+.prose{max-width:42rem;margin-left:auto;margin-right:auto}
+.prose h2{text-align:center}
+.about-hero .wrap:first-child{text-align:center}
+.about-hero .wrap:first-child .lead{margin-left:auto;margin-right:auto}
+.about-hero .wrap:first-child .rule{margin-left:auto;margin-right:auto}
+.split > div > .btn-row{justify-content:flex-start}
+@media (max-width:959px){
+  .hero-photo-layout .hero-inner{text-align:center}
+  .hero-photo-layout .hero-inner .lead{margin-left:auto;margin-right:auto}
+  .hero-photo-layout .btn-row{justify-content:center}
+  .split{text-align:center}
+  .split > div > .btn-row{justify-content:center}
+  .split .facts{max-width:28rem;margin-left:auto;margin-right:auto}
+  .split p{margin-left:auto;margin-right:auto}
+}
+main section > .wrap:not(.prose):not(.split) > p{text-align:center;margin-left:auto;margin-right:auto}
+@media (min-width:960px){main section > .wrap.split > div > .btn-row{justify-content:flex-start}}
+@media (max-width:699px){
+  .site-footer{text-align:center}
+  .foot-grid{justify-items:center}
+  .fine{text-align:center}
+}
