@@ -190,7 +190,7 @@ async function cancelBooking(b, byAdmin) {
 
 /* ---------- views ---------- */
 function go(v) { view = v; render(); window.scrollTo(0, 0); }
-function head(label, title, lead) { return '<div class="wrap page-head"><span class="label">' + label + "</span><h1>" + title + "</h1>" + (lead ? '<p class="lead">' + lead + "</p>" : "") + "</div>"; }
+function head(label, title, lead) { return '<div class="wrap page-head"><h1>' + title + "</h1>" + (lead ? '<p class="lead">' + lead + "</p>" : "") + "</div>"; }
 function alertBox(msg, ok) { return msg ? '<p class="alert' + (ok ? " ok" : "") + '" role="' + (ok ? "status" : "alert") + '">' + esc(msg) + "</p>" : ""; }
 function hours(min) { return min % 60 === 0 ? (min / 60) + " hour" + (min === 60 ? "" : "s") : min + " min"; }
 
@@ -215,7 +215,7 @@ function renderForm() {
   if (left <= 0) { view = { name: "list", msg: "Sorry, that date is full." }; return renderList(); }
   var opts = ""; for (var n = 1; n <= Math.min(left, MAX_SEATS); n++) opts += '<option value="' + n + '"' + (String(n) === String(v.seats || 1) ? " selected" : "") + ">" + n + "</option>";
   var addon = s.addonName ? '<div class="check"><input type="checkbox" id="addon" name="addon"' + (v.addon ? " checked" : "") + '><label for="addon">' + esc(s.addonName) + " (+" + money(s.addonCents) + " per seat)</label></div>" : "";
-  return head(esc(niceDate(s.startsAt)), esc(s.title), esc(s.location) + " · " + money(s.priceCents) + " per seat · " + left + " seat" + (left === 1 ? "" : "s") + " left") +
+  return head("", esc(s.title), esc(niceDate(s.startsAt)) + " · " + esc(s.location) + " · " + money(s.priceCents) + " per seat · " + left + " seat" + (left === 1 ? "" : "s") + " left") +
     '<section style="padding-top:0"><div class="wrap" style="max-width:640px">' + alertBox(view.msg) +
     '<form id="bookform" novalidate><div><label for="name">Name</label><input id="name" name="name" autocomplete="name" maxlength="80" value="' + esc(v.name) + '"></div>' +
     '<div><label for="email">Email</label><input id="email" name="email" type="email" autocomplete="email" maxlength="120" value="' + esc(v.email) + '"></div>' +
@@ -228,7 +228,7 @@ function renderForm() {
 function renderCheckout() {
   var b = state.bookings[view.token], s = b && state.sessions[b.sessionId];
   if (!b || b.status !== "held" || b.holdExpires <= Date.now()) return renderDone();
-  return head("Test Checkout", "Payment", "This stands in for Square's checkout page. No card is needed and no money moves.") +
+  return head("", "Test <em>checkout</em>", "This stands in for Square's checkout page. No card is needed and no money moves.") +
     '<section style="padding-top:0"><div class="wrap" style="max-width:640px"><div class="card"><h3>' + esc(s.title) + "</h3><p>" + esc(niceDate(s.startsAt)) + " · " + b.seats + " seat" + (b.seats > 1 ? "s" : "") +
     '</p><p class="total">' + money(b.totalCents) + '</p><div class="btn-row"><button class="btn btn-primary" data-act="pay">Pay (test)</button><button class="btn btn-outline" data-act="cancelhold">Cancel</button></div></div></div></section>';
 }
@@ -278,7 +278,7 @@ function renderGuests() {
       return "<li><strong>" + esc(b.name) + '</strong><span class="note">' + esc(b.email) + "</span><span>" + b.seats + " seat" + (b.seats > 1 ? "s" : "") + (b.withAddon ? " + card" : "") + " · " + money(b.totalCents) + " · " + (LABELS[st] || esc(st)) + "</span>" +
         (st === "confirmed" || st === "needs_refund" ? '<div class="row"><button class="btn btn-outline" data-act="admincancel" data-token="' + esc(b.token) + '">Cancel booking</button></div>' : "") + "</li>";
     }).join("") || "<li>No bookings yet.</li>";
-  return head(esc(niceDate(s.startsAt)), esc(s.title), taken(s.id) + " of " + s.capacity + " seats taken · " + esc(s.location)) +
+  return head("", esc(s.title), esc(niceDate(s.startsAt)) + " · " + taken(s.id) + " of " + s.capacity + " seats taken · " + esc(s.location)) +
     '<section style="padding-top:0"><div class="wrap">' + alertBox(view.msg, true) + '<ul class="adm">' + list + '</ul><p class="note" style="margin-top:1rem">Cancelling frees the seats and emails the guest. Refunds are issued in Square.</p>' +
     '<p><button class="linkbtn" data-act="admin">Back to all dates</button></p></div></section>';
 }
@@ -287,7 +287,7 @@ function renderOutbox() {
   var items = state.outbox.slice().sort(function (a, b) { return b.created - a.created; }).map(function (m) {
     return '<li><span class="label">To ' + esc(m.to) + " · " + new Date(m.created).toLocaleString() + "</span><strong>" + esc(m.subject) + "</strong><pre>" + esc(m.body) + "</pre></li>";
   }).join("") || "<li>No emails yet.</li>";
-  return head("Email outbox", "Emails", "In test mode emails are saved here instead of being sent.") + '<section style="padding-top:0"><div class="wrap"><ul class="adm">' + items +
+  return head("", "Email <em>outbox</em>", "In test mode emails are saved here instead of being sent.") + '<section style="padding-top:0"><div class="wrap"><ul class="adm">' + items +
     '</ul><p><button class="linkbtn" data-act="admin">Back to admin</button></p></div></section>';
 }
 
