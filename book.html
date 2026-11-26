@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Book a Lesson | Soul Sisters Mahjong</title>
+<meta name="description" content="Reserve a seat at a Soul Sisters Mahjong lesson or event.">
+<meta name="theme-color" content="#315F62">
+<link rel="icon" type="image/png" href="assets/ssm-icon.png">
+<link rel="preload" href="fonts/cormorant-garamond-latin-600-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="css/style.css">
+<style>
+.book-list{display:grid;gap:1rem;margin-top:1.5rem}
+.slot{display:grid;gap:.5rem}
+.meta{color:#4b5857}
+.seats-left{font-weight:600;color:var(--deep-teal)}
+.seats-left.low{color:var(--terracotta)}
+.full{opacity:.65}
+.total{font-family:var(--serif);font-size:2rem;font-weight:600;color:var(--terracotta);font-variant-numeric:lining-nums}
+.check{display:flex;gap:.75rem;align-items:flex-start;min-height:48px}
+.check input{width:24px;height:24px;min-height:0;margin-top:.15rem;flex:none}
+.check label{font-weight:500;margin:0}
+.alert{background:#fff;border-left:4px solid var(--terracotta);border-radius:8px;padding:.9rem 1rem;margin-bottom:1.25rem}
+.alert.ok{border-left-color:var(--teal)}
+.test-flag{background:var(--blush);text-align:center;font-size:.8rem;font-weight:600;padding:.5rem 1rem}
+.adm{list-style:none;display:grid;gap:.75rem;margin-top:1rem}
+.adm li{background:#fff;border:1px solid rgba(178,138,74,.35);border-radius:12px;padding:1rem;display:grid;gap:.35rem}
+.adm .row{display:flex;flex-wrap:wrap;gap:.5rem;align-items:center}
+.adm .btn{min-height:44px;padding:.4rem 1rem;font-size:.85rem}
+pre{white-space:pre-wrap;font-family:var(--sans);font-size:.9rem}
+.busy{opacity:.6;pointer-events:none}
+.linkbtn{background:none;border:0;color:var(--deep-teal);text-decoration:underline;font:inherit;cursor:pointer;min-height:44px;padding:0}
+@media (min-width:700px){.slot{grid-template-columns:1fr auto;align-items:center}}
+</style>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<div class="test-flag" id="flag">Test mode: no real payments are taken</div>
+<header class="site-header"><div class="wrap bar">
+  <a href="index.html" class="brand" aria-label="Soul Sisters Mahjong home"><img src="assets/ssm-icon.png" alt="" class="brand-icon" width="142" height="240"><img src="assets/ssm-wordmark.png" alt="Soul Sisters Mahjong" class="brand-word" width="900" height="241"></a>
+  <a href="index.html" class="btn btn-outline" id="hdr-btn">Back to Site</a>
+</div></header>
+<main id="main"><div id="app" aria-live="polite"><div class="wrap page-head"><p class="lead">Loading dates&hellip;</p></div></div></main>
+<footer class="site-footer"><div class="wrap"><p class="foot-tagline">One Table. Endless Connections.</p><p>Rockwall, Texas</p></div></footer>
+
+<script>
+(function () {
+"use strict";
+var HOLD_MIN = 15, MAX_SEATS = 4, TZ = "America/Chicago";
+var app = document.getElementById("app");
+var db = null, canAdmin = false, persisted = false;
+var state = { sessions: {}, bookings: {}, outbox: [], ready: false };
+var view = { name: "list" };
+var esc = function (s) { return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) { return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]; }); };
+var money = function (c) { return "$" + (c / 100).toLocaleString(undefined, { minimumFractionDigits: c % 100 ? 2 : 0 }); };
+var uid = function () { return (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2)).replace(/[^a-zA-Z0-9-]/g, ""); };
+
+/* ---------- time (Central Time, Rockwall TX) ---------- */
+function ctParts(ms) {
+  var p = {}; new Intl.DateTimeFormat("en-US", { timeZone: TZ, year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23" })
+    .formatToParts(new Date(ms)).forEach(function (x) { p[x.type] = x.value; }); return p;
+}
+function ctToMs(s) { // "YYYY-MM-DDTHH:MM" in Central Time -> epoch ms
+  var m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/.exec(s || ""); if (!m) return NaN;
+  var guess = Date.UTC(+m[1], m[2] - 1, +m[3], +m[4], +m[5]);
+  for (var i = 0; i < 2; i++) { var p = ctParts(guess); var asUtc = Date.UTC(+p.year, p.month - 1, +p.day, +p.hour, +p.minute); guess += Date.UTC(+m[1], m[2] - 1, +m[3], +m[4], +m[5]) - asUtc; }
+  return guess;
+}
+function niceDate(s) {
+  var ms = ctToMs(s); if (isNaN(ms)) return s;
+  return new Intl.DateTimeFormat("en-US", { timeZone: TZ, weekday: "short", month: "short", day: "numeric" }).format(ms) + " · " +
+    new Intl.DateTimeFormat("en-US", { timeZone: TZ, hour: "numeric", minute: "2-digit" }).format(ms) + " CT";
+}
+function ctLocalInput(ms) { var p = ctParts(ms); return p.year + "-" + p.month + "-" + p.day + "T13:00"; }
+
+/* ---------- local stand-in store (used only if saving isn't available) ---------- */
+function LocalDB() {
+  var data = new Map(), subs = [];
+  function snap(path) { var d = data.get(path); var id = path.split("/").pop(); return { id: id, exists: !!d, data: function () { return d ? JSON.parse(JSON.stringify(d)) : undefined; }, metadata: { fromCache: false } }; }
+  function notify() { subs.forEach(function (s) { s.fire(); }); }
+  function docRef(path) {
+    return { id: path.split("/").pop(), path: path,
+      get: function () { return Promise.resolve(snap(path)); },
+      set: function (o) { data.set(path, JSON.parse(JSON.stringify(o))); notify(); return Promise.resolve(); },
+      update: function (o) { if (!data.has(path)) return Promise.reject({ code: "invalid_argument" }); data.set(path, Object.assign({}, data.get(path), JSON.parse(JSON.stringify(o)))); notify(); return Promise.resolve(); },
+      delete: function () { data.delete(path); notify(); return Promise.resolve(); },
+      acquire: function () { return Promise.resolve({ acquired: true }); } };
+  }
+  function colRef(path) {
+    return { path: path, doc: function (id) { return docRef(path + "/" + (id || uid())); },
+      onSnapshot: function (next) {
+        var s = { fire: function () { var docs = []; data.forEach(function (v, k) { if (k.indexOf(path + "/") === 0 && k.slice(path.length + 1).indexOf("/") < 0) docs.push(snap(k)); }); next({ docs: docs, metadata: { fromCache: false } }); } };
+        subs.push(s); setTimeout(s.fire, 0); return function () { subs.splice(subs.indexOf(s), 1); };
+      } };
+  }
+  return { doc: docRef, collection: colRef };
+}
+
+/* ---------- data helpers ---------- */
+function seatRef(sid, n) { return db.collection("sessions/" + sid + "/seats").doc("s" + n); }
+function upcoming() {
+  var now = Date.now();
+  return Object.keys(state.sessions).map(function (k) { return state.sessions[k]; })
+    .filter(function (s) { return s.published && ctToMs(s.startsAt) > now; })
+    .sort(function (a, b) { return a.startsAt < b.startsAt ? -1 : 1; });
+}
+function isActive(b) { return b.status === "confirmed" || (b.status === "held" && b.holdExpires > Date.now()); }
+function taken(sid) { var n = 0; Object.keys(state.bookings).forEach(function (k) { var b = state.bookings[k]; if (b.sessionId === sid && isActive(b)) n += b.seats; }); return n; }
+function seatsLeft(s) { return Math.max(0, s.capacity - taken(s.id)); }
+function email(to, subject, body) { return db.collection("outbox").doc(uid()).set({ to: to, subject: subject, body: body, created: Date.now() }); }
+
+/* Short lock on one seat. If someone else holds it (they're mid-booking or just finished),
+   wait for their lock to lapse and try again rather than calling the seat taken. */
+var sleep = function (ms) { return new Promise(function (r) { setTimeout(r, ms); }); };
+async function lockSeat(ref, token) {
+  for (var tries = 0; tries < 5; tries++) {
+    var lock = await ref.acquire({ holder: token, ttlMs: 2000 });
+    if (lock.acquired) return true;
+    var wait = lock.expiresAt ? Date.parse(lock.expiresAt) - Date.now() : 500;
+    await sleep(Math.min(Math.max(wait, 150), 2100) + Math.random() * 150);
+  }
+  return false;
+}
+/* Claims one seat slot under that lock so two people can never take the same seat. */
+async function claimSeat(sid, n, token, expires) {
+  var ref = seatRef(sid, n);
+  if (!(await lockSeat(ref, token))) return false;
+  var snap = await ref.get(), d = snap.exists ? snap.data() : null;
+  var free = !d || !d.booking || d.booking === token || (d.status === "held" && d.expires <= Date.now());
+  if (!free) return false;
+  await ref.set({ booking: token, status: "held", expires: expires });
+  return true;
+}
+async function releaseSeats(b) {
+  for (var i = 0; i < (b.seatIds || []).length; i++) {
+    var ref = seatRef(b.sessionId, b.seatIds[i]);
+    if (!(await lockSeat(ref, b.token))) continue;
+    var snap = await ref.get(), d = snap.exists ? snap.data() : null;
+    if (d && d.booking === b.token) await ref.set({ booking: null, status: null, expires: null });
+  }
+}
+
+async function createHold(s, name, mail, seats, addon) {
+  var token = uid(), expires = Date.now() + HOLD_MIN * 60000, got = [];
+  for (var n = 1; n <= s.capacity && got.length < seats; n++) { if (await claimSeat(s.id, n, token, expires)) got.push(n); }
+  if (got.length < seats) {
+    await releaseSeats({ token: token, sessionId: s.id, seatIds: got });
+    var left = got.length;
+    return { error: left === 0 ? "Sorry, that date just filled up." : "Only " + left + " seat" + (left === 1 ? "" : "s") + " left for this date." };
+  }
+  var unit = s.priceCents + (addon && s.addonName ? s.addonCents : 0);
+  var b = { token: token, sessionId: s.id, name: name, email: mail, seats: seats, seatIds: got, withAddon: !!(addon && s.addonName),
+            unitCents: unit, totalCents: unit * seats, status: "held", holdExpires: expires, created: Date.now() };
+  await db.collection("bookings").doc(token).set(b);
+  state.bookings[token] = b;
+  return { booking: b };
+}
+
+async function confirm(b) {
+  var s = state.sessions[b.sessionId];
+  if (b.status === "confirmed" || b.status === "needs_refund") return b.status;
+  // Make sure every seat is still this booking's (it may have expired and been re-taken).
+  var mine = [], expires = Date.now() + 60000;
+  for (var i = 0; i < b.seatIds.length; i++) if (await claimSeat(b.sessionId, b.seatIds[i], b.token, expires)) mine.push(b.seatIds[i]);
+  for (var n = 1; n <= s.capacity && mine.length < b.seats; n++) if (mine.indexOf(n) < 0 && await claimSeat(b.sessionId, n, b.token, expires)) mine.push(n);
+  var status;
+  if (mine.length >= b.seats) {
+    for (var j = 0; j < mine.length; j++) await seatRef(b.sessionId, mine[j]).set({ booking: b.token, status: "confirmed", expires: null });
+    status = "confirmed";
+    await db.collection("bookings").doc(b.token).update({ status: status, seatIds: mine, confirmed: Date.now() });
+    await email(b.email, "You're booked: " + s.title, "Hi " + b.name + ",\n\nThank you! Your seat" + (b.seats > 1 ? "s are" : " is") + " confirmed.\n\n" +
+      s.title + "\n" + niceDate(s.startsAt) + "\n" + s.location + "\nSeats: " + b.seats + "\nPaid: " + money(b.totalCents) +
+      "\n\nThe address will be sent before the lesson. Snacks and drinks are provided.\n\nOne Table. Endless Connections.\nSoul Sisters Mahjong");
+  } else {
+    await releaseSeats({ token: b.token, sessionId: b.sessionId, seatIds: mine });
+    status = "needs_refund";
+    await db.collection("bookings").doc(b.token).update({ status: status, seatIds: [] });
+    await email(b.email, "About your Soul Sisters booking", "Hi " + b.name + ",\n\nYour payment came through after your hold expired, and that date has since filled. We'll refund you in full and help you find another date.\n\nSoul Sisters Mahjong");
+  }
+  state.bookings[b.token] = Object.assign({}, b, { status: status });
+  return status;
+}
+
+async function cancelBooking(b, byAdmin) {
+  await releaseSeats(b);
+  await db.collection("bookings").doc(b.token).update({ status: "cancelled" });
+  if (byAdmin) await email(b.email, "Your Soul Sisters booking was cancelled", "Hi " + b.name + ",\n\nYour booking has been cancelled and a refund of " + money(b.totalCents) + " is on its way.\n\nSoul Sisters Mahjong");
+  state.bookings[b.token] = Object.assign({}, b, { status: "cancelled" });
+}
+
+/* ---------- views ---------- */
+function go(v) { view = v; render(); window.scrollTo(0, 0); }
+function head(label, title, lead) { return '<div class="wrap page-head"><span class="label">' + label + "</span><h1>" + title + "</h1>" + (lead ? '<p class="lead">' + lead + "</p>" : "") + "</div>"; }
+function alertBox(msg, ok) { return msg ? '<p class="alert' + (ok ? " ok" : "") + '" role="' + (ok ? "status" : "alert") + '">' + esc(msg) + "</p>" : ""; }
+function hours(min) { return min % 60 === 0 ? (min / 60) + " hour" + (min === 60 ? "" : "s") : min + " min"; }
+
+function renderList() {
+  var list = upcoming().map(function (s) {
+    var left = seatsLeft(s);
+    var price = money(s.priceCents) + " per seat" + (s.addonName ? " · " + money(s.priceCents + s.addonCents) + " with card" : "");
+    var seats = left > 0 ? '<p class="seats-left' + (left <= 2 ? " low" : "") + '">' + left + " of " + s.capacity + " seats left</p>" : '<p class="seats-left low">Full</p>';
+    var action = left > 0 ? '<button class="btn btn-primary" data-act="reserve" data-id="' + esc(s.id) + '">Reserve</button>' : '<a class="btn btn-outline" href="contact.html">Join Waitlist</a>';
+    return '<article class="card slot' + (left > 0 ? "" : " full") + '"><div><span class="label">' + esc(niceDate(s.startsAt)) + "</span><h3>" + esc(s.title) + '</h3><p class="meta">' +
+      esc(s.location) + " · " + hours(s.durationMin) + " · " + esc(price) + "</p>" + seats + "</div><div>" + action + "</div></article>";
+  }).join("");
+  if (!list) list = '<div class="card"><p>No dates are open right now. <a href="contact.html">Get in touch</a> and we\'ll let you know when new ones are added.</p></div>';
+  return head("Book", "Reserve your <em>seat.</em>", "Small groups, plenty of questions, and a seat for everyone at the table.") +
+    '<section style="padding-top:0"><div class="wrap">' + alertBox(view.msg) + '<div class="book-list">' + list + "</div>" +
+    (canAdmin ? '<p style="margin-top:2rem"><button class="linkbtn" data-act="admin">Admin: manage dates and bookings</button></p>' : "") + "</div></section>";
+}
+
+function renderForm() {
+  var s = state.sessions[view.id]; if (!s) return renderList();
+  var left = seatsLeft(s), v = view.values || {};
+  if (left <= 0) { view = { name: "list", msg: "Sorry, that date is full." }; return renderList(); }
+  var opts = ""; for (var n = 1; n <= Math.min(left, MAX_SEATS); n++) opts += '<option value="' + n + '"' + (String(n) === String(v.seats || 1) ? " selected" : "") + ">" + n + "</option>";
+  var addon = s.addonName ? '<div class="check"><input type="checkbox" id="addon" name="addon"' + (v.addon ? " checked" : "") + '><label for="addon">' + esc(s.addonName) + " (+" + money(s.addonCents) + " per seat)</label></div>" : "";
+  return head(esc(niceDate(s.startsAt)), esc(s.title), esc(s.location) + " · " + money(s.priceCents) + " per seat · " + left + " seat" + (left === 1 ? "" : "s") + " left") +
+    '<section style="padding-top:0"><div class="wrap" style="max-width:640px">' + alertBox(view.msg) +
+    '<form id="bookform" novalidate><div><label for="name">Name</label><input id="name" name="name" autocomplete="name" maxlength="80" value="' + esc(v.name) + '"></div>' +
+    '<div><label for="email">Email</label><input id="email" name="email" type="email" autocomplete="email" maxlength="120" value="' + esc(v.email) + '"></div>' +
+    '<div><label for="seats">Seats</label><select id="seats" name="seats">' + opts + "</select></div>" + addon +
+    '<p>Total: <span class="total" id="total"></span></p><p class="note">Your seats are held for ' + HOLD_MIN + " minutes while you check out.</p>" +
+    '<button class="btn btn-primary" type="submit">Continue to Payment</button></form>' +
+    '<p style="margin-top:1.5rem"><button class="linkbtn" data-act="list">See other dates</button></p></div></section>';
+}
+
+function renderCheckout() {
+  var b = state.bookings[view.token], s = b && state.sessions[b.sessionId];
+  if (!b || b.status !== "held" || b.holdExpires <= Date.now()) return renderDone();
+  return head("Test Checkout", "Payment", "This stands in for Square's checkout page. No card is needed and no money moves.") +
+    '<section style="padding-top:0"><div class="wrap" style="max-width:640px"><div class="card"><h3>' + esc(s.title) + "</h3><p>" + esc(niceDate(s.startsAt)) + " · " + b.seats + " seat" + (b.seats > 1 ? "s" : "") +
+    '</p><p class="total">' + money(b.totalCents) + '</p><div class="btn-row"><button class="btn btn-primary" data-act="pay">Pay (test)</button><button class="btn btn-outline" data-act="cancelhold">Cancel</button></div></div></div></section>';
+}
+
+function renderDone() {
+  var b = state.bookings[view.token], s = b && state.sessions[b.sessionId];
+  if (!b || !s) return renderList();
+  var st = b.status === "held" && b.holdExpires <= Date.now() ? "expired" : b.status, msg;
+  if (st === "confirmed") msg = head("Confirmed", "You're <em>booked!</em>", "Thank you, " + esc(b.name) + ". A confirmation is on its way to " + esc(b.email) + ".");
+  else if (st === "needs_refund") msg = head("Sorry", "That date <em>filled up.</em>", "Your payment arrived after your hold expired. You'll get a full refund, and we'll help you find another date.");
+  else msg = head("Not booked", "No seats were <em>reserved.</em>", "Your hold was cancelled or expired, and you weren't charged.");
+  return msg + '<section style="padding-top:0"><div class="wrap" style="max-width:640px"><div class="card"><h3>' + esc(s.title) + "</h3><p>" + esc(niceDate(s.startsAt)) + "<br>" + esc(s.location) + "<br>" +
+    b.seats + " seat" + (b.seats > 1 ? "s" : "") + " · " + money(b.totalCents) + '</p></div><div class="btn-row"><button class="btn btn-outline" data-act="list">See All Dates</button><a href="index.html" class="btn btn-dark">Back to Site</a></div></div></section>';
+}
+
+var LABELS = { confirmed: "Confirmed", held: "Paying now", expired: "Expired (unpaid)", cancelled: "Cancelled", needs_refund: "Paid late: refund needed" };
+function renderAdmin() {
+  if (!canAdmin) return renderList();
+  var now = Date.now();
+  var all = Object.keys(state.sessions).map(function (k) { return state.sessions[k]; }).sort(function (a, b) { return a.startsAt < b.startsAt ? -1 : 1; });
+  var rows = all.map(function (s) {
+    var refunds = Object.keys(state.bookings).filter(function (k) { var b = state.bookings[k]; return b.sessionId === s.id && b.status === "needs_refund"; }).length;
+    var past = ctToMs(s.startsAt) <= now;
+    return '<li><span class="label">' + esc(niceDate(s.startsAt)) + "</span><strong>" + esc(s.title) + (s.sample ? ' <span class="tag">Sample</span>' : "") + "</strong>" +
+      "<span>" + taken(s.id) + " / " + s.capacity + " booked · " + (past ? "Past" : s.published ? "Live" : "Hidden") + (refunds ? ' · <strong style="color:var(--terracotta)">' + refunds + " refund needed</strong>" : "") + "</span>" +
+      '<div class="row"><button class="btn btn-outline" data-act="guests" data-id="' + esc(s.id) + '">Guests</button><button class="btn btn-outline" data-act="toggle" data-id="' + esc(s.id) + '">' + (s.published ? "Hide" : "Show") + "</button></div></li>";
+  }).join("") || "<li>No dates yet. Add one below.</li>";
+  return head("Admin", "Lessons &amp; <em>events</em>", "Payments: TEST mode · " + state.outbox.length + ' emails in the <button class="linkbtn" data-act="outbox">outbox</button>') +
+    '<section style="padding-top:0"><div class="wrap">' + alertBox(view.msg, true) + '<ul class="adm">' + rows + "</ul>" +
+    '<h2 style="margin-top:3rem">Add a date</h2><form id="sessform" style="max-width:760px" novalidate>' +
+    '<div class="grid form-2"><div><label for="t">Title</label><input id="t" name="title" value="American Mahjong 101" maxlength="100"></div>' +
+    '<div><label for="d">Date and time (CT)</label><input id="d" name="startsAt" type="datetime-local" value="' + ctLocalInput(now + 7 * 864e5) + '"></div></div>' +
+    '<div class="grid form-2"><div><label for="loc">Location</label><input id="loc" name="location" value="Rockwall, TX" maxlength="100"></div>' +
+    '<div><label for="dur">Length (minutes)</label><input id="dur" name="duration" type="number" min="15" max="720" value="180"></div></div>' +
+    '<div class="grid form-2"><div><label for="p">Price per seat ($)</label><input id="p" name="price" type="number" min="0" step="0.01" value="35"></div>' +
+    '<div><label for="c">Seats</label><input id="c" name="capacity" type="number" min="1" max="20" value="4"></div></div>' +
+    '<div class="grid form-2"><div><label for="an">Add-on (optional)</label><input id="an" name="addonName" value="Add the current NMJL card" maxlength="100"></div>' +
+    '<div><label for="ap">Add-on price ($)</label><input id="ap" name="addonPrice" type="number" min="0" step="0.01" value="20"></div></div>' +
+    '<button class="btn btn-primary" type="submit">Add Date</button></form></div></section>';
+}
+
+function renderGuests() {
+  var s = state.sessions[view.id]; if (!s || !canAdmin) return renderAdmin();
+  var list = Object.keys(state.bookings).map(function (k) { return state.bookings[k]; }).filter(function (b) { return b.sessionId === s.id; })
+    .sort(function (a, b) { return a.created - b.created; }).map(function (b) {
+      var st = b.status === "held" && b.holdExpires <= Date.now() ? "expired" : b.status;
+      return "<li><strong>" + esc(b.name) + '</strong><span class="note">' + esc(b.email) + "</span><span>" + b.seats + " seat" + (b.seats > 1 ? "s" : "") + (b.withAddon ? " + card" : "") + " · " + money(b.totalCents) + " · " + (LABELS[st] || esc(st)) + "</span>" +
+        (st === "confirmed" || st === "needs_refund" ? '<div class="row"><button class="btn btn-outline" data-act="admincancel" data-token="' + esc(b.token) + '">Cancel booking</button></div>' : "") + "</li>";
+    }).join("") || "<li>No bookings yet.</li>";
+  return head(esc(niceDate(s.startsAt)), esc(s.title), taken(s.id) + " of " + s.capacity + " seats taken · " + esc(s.location)) +
+    '<section style="padding-top:0"><div class="wrap">' + alertBox(view.msg, true) + '<ul class="adm">' + list + '</ul><p class="note" style="margin-top:1rem">Cancelling frees the seats and emails the guest. Refunds are issued in Square.</p>' +
+    '<p><button class="linkbtn" data-act="admin">Back to all dates</button></p></div></section>';
+}
+
+function renderOutbox() {
+  var items = state.outbox.slice().sort(function (a, b) { return b.created - a.created; }).map(function (m) {
+    return '<li><span class="label">To ' + esc(m.to) + " · " + new Date(m.created).toLocaleString() + "</span><strong>" + esc(m.subject) + "</strong><pre>" + esc(m.body) + "</pre></li>";
+  }).join("") || "<li>No emails yet.</li>";
+  return head("Email outbox", "Emails", "In test mode emails are saved here instead of being sent.") + '<section style="padding-top:0"><div class="wrap"><ul class="adm">' + items +
+    '</ul><p><button class="linkbtn" data-act="admin">Back to admin</button></p></div></section>';
+}
+
+function render() {
+  if (!state.ready) return;
+  var focusId = document.activeElement && document.activeElement.id;
+  if (view.name === "form" && document.getElementById("bookform")) return updateTotal(); // don't wipe what someone is typing
+  if (view.name === "admin" && document.getElementById("sessform") && document.activeElement && document.activeElement.form) return;
+  var fn = { list: renderList, form: renderForm, checkout: renderCheckout, done: renderDone, admin: renderAdmin, guests: renderGuests, outbox: renderOutbox }[view.name] || renderList;
+  app.innerHTML = fn();
+  if (!persisted) app.insertAdjacentHTML("afterbegin", '<div class="wrap" style="padding-top:1rem"><p class="alert">Test version: bookings on this page aren\'t saved yet, so anything you book disappears when you leave.</p></div>');
+  document.getElementById("hdr-btn").outerHTML = (view.name === "admin" || view.name === "guests" || view.name === "outbox")
+    ? '<button class="btn btn-outline" id="hdr-btn" data-act="list">Booking Page</button>' : '<a href="index.html" class="btn btn-outline" id="hdr-btn">Back to Site</a>';
+  if (view.name === "form") updateTotal();
+  if (focusId && document.getElementById(focusId)) document.getElementById(focusId).focus();
+}
+function updateTotal() {
+  var f = document.getElementById("bookform"), s = state.sessions[view.id]; if (!f || !s) return;
+  var unit = s.priceCents + (f.addon && f.addon.checked ? s.addonCents : 0);
+  document.getElementById("total").textContent = money(unit * (+f.seats.value || 1));
+}
+
+/* ---------- actions ---------- */
+async function busy(el, fn) { var t = el.closest("section") || app; t.classList.add("busy"); try { await fn(); } catch (e) { console.error(e); view.msg = "Something went wrong saving that. Please try again."; render(); } finally { t.classList.remove("busy"); } }
+var EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
+
+document.addEventListener("click", function (e) {
+  var el = e.target.closest("[data-act]"); if (!el) return;
+  var act = el.dataset.act;
+  if (act === "list") return go({ name: "list" });
+  if (act === "reserve") return go({ name: "form", id: el.dataset.id });
+  if (act === "admin") return go({ name: "admin" });
+  if (act === "outbox") return go({ name: "outbox" });
+  if (act === "guests") return go({ name: "guests", id: el.dataset.id });
+  if (act === "pay") return busy(el, async function () { var st = await confirm(state.bookings[view.token]); go({ name: "done", token: view.token }); });
+  if (act === "cancelhold") return busy(el, async function () { await cancelBooking(state.bookings[view.token], false); go({ name: "done", token: view.token }); });
+  if (act === "toggle") return busy(el, async function () { var s = state.sessions[el.dataset.id]; await db.collection("sessions").doc(s.id).update({ published: !s.published }); });
+  if (act === "admincancel") return busy(el, async function () { var b = state.bookings[el.dataset.token]; await cancelBooking(b, true); view.msg = "Cancelled " + b.name + "'s booking and emailed them."; render(); });
+});
+document.addEventListener("change", function (e) { if (e.target.form && e.target.form.id === "bookform") updateTotal(); });
+document.addEventListener("submit", function (e) {
+  e.preventDefault();
+  var f = e.target;
+  if (f.id === "bookform") {
+    var s = state.sessions[view.id], name = f.name.value.trim(), mail = f.email.value.trim(), seats = +f.seats.value, addon = !!(f.addon && f.addon.checked);
+    view.values = { name: name, email: mail, seats: seats, addon: addon };
+    var err = !name ? "Please add your name." : !EMAIL_RE.test(mail) ? "Please add a valid email so we can send your confirmation." : !(seats >= 1 && seats <= MAX_SEATS) ? "Please choose how many seats." : "";
+    if (err) { view.msg = err; app.innerHTML = renderForm(); updateTotal(); return; }
+    busy(f, async function () {
+      var r = await createHold(s, name, mail, seats, addon);
+      if (r.error) { view.msg = r.error; app.innerHTML = renderForm(); updateTotal(); return; }
+      go({ name: "checkout", token: r.booking.token });
+    });
+  }
+  if (f.id === "sessform") {
+    var g = function (n) { return f[n].value.trim(); };
+    var startsAt = g("startsAt").slice(0, 16), price = Math.round(parseFloat(g("price")) * 100), cap = parseInt(g("capacity"), 10), dur = parseInt(g("duration"), 10);
+    var addonName = g("addonName"), addonCents = addonName ? Math.round(parseFloat(g("addonPrice") || "0") * 100) : 0;
+    if (!g("title") || !g("location") || isNaN(ctToMs(startsAt)) || !(price >= 0) || !(cap >= 1 && cap <= 20) || !(dur >= 15 && dur <= 720) || !(addonCents >= 0)) {
+      view.msg = ""; app.insertAdjacentHTML("afterbegin", '<div class="wrap"><p class="alert" role="alert">Couldn\'t add that date. Check every field and try again.</p></div>'); return;
+    }
+    busy(f, async function () {
+      var id = uid();
+      await db.collection("sessions").doc(id).set({ id: id, title: g("title").slice(0, 100), startsAt: startsAt, durationMin: dur, location: g("location").slice(0, 100),
+        priceCents: price, addonName: addonName ? addonName.slice(0, 100) : null, addonCents: addonCents, capacity: cap, published: true, sample: false, created: Date.now() });
+      document.activeElement && document.activeElement.blur();
+      view = { name: "admin", msg: "Added " + niceDate(startsAt) + "." }; render();
+    });
+  }
+});
+
+/* ---------- start ---------- */
+function listen(col, apply) {
+  return db.collection(col).onSnapshot(function (snap) { apply(snap.docs.map(function (d) { var o = d.data(); o.id = o.id || d.id; return o; })); state.ready = true; clearTimeout(timer); render(); },
+    function (err) { console.error(err); });
+}
+var timer;
+async function start() {
+  var real = null, user = null;
+  try { real = await (window.claude && window.claude.use ? window.claude.use("db") : null); } catch (e) { real = null; }
+  try { user = await (window.claude && window.claude.use ? window.claude.use("user") : null); } catch (e) { user = null; }
+  persisted = !!real;
+  db = real || LocalDB();
+  if (user) { try { canAdmin = !!(await user.canEdit()); } catch (e) { canAdmin = false; } } else { canAdmin = !real && location.hash === "#admin"; }
+  if (location.hash === "#admin" && canAdmin) view = { name: "admin" };
+  timer = setTimeout(function () { if (!state.ready) app.innerHTML = '<div class="wrap page-head"><p class="lead">Dates can\'t be reached right now. Please check your connection.</p></div>'; }, 10000);
+  if (!real) { // stand-in data so the page can still be tried
+    var base = Date.now();
+    [7, 14, 21].forEach(function (d) { var id = "sample" + d; db.collection("sessions").doc(id).set({ id: id, title: "American Mahjong 101", startsAt: ctLocalInput(base + d * 864e5), durationMin: 180, location: "Rockwall, TX", priceCents: 3500, addonName: "Add the current NMJL card", addonCents: 2000, capacity: 4, published: true, sample: true, created: base }); });
+  }
+  listen("sessions", function (rows) { state.sessions = {}; rows.forEach(function (r) { state.sessions[r.id] = r; }); });
+  listen("bookings", function (rows) { state.bookings = {}; rows.forEach(function (r) { state.bookings[r.token || r.id] = r; }); });
+  listen("outbox", function (rows) { state.outbox = rows; });
+  setInterval(function () { if (view.name === "list" || view.name === "admin" || view.name === "guests") render(); }, 30000); // let expired holds release on screen
+}
+if (window.__SSM_TEST__) window.__ssm = { createHold: createHold, confirm: confirm, cancelBooking: cancelBooking, state: state };
+start();
+})();
+</script>
+</body>
+</html>
