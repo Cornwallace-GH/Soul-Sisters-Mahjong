@@ -245,3 +245,7 @@ main section > .wrap:not(.prose):not(.split) > p{text-align:center;margin-left:a
   .foot-grid{justify-items:center}
   .fine{text-align:center}
 }
+
+/* Hero title stacked: each line stays whole on every screen */
+h1.stack span,h1.stack em{display:block;white-space:nowrap}
+.hero-photo-layout h1.stack{font-size:clamp(2.15rem,9.6vw,4.1rem);text-wrap:nowrap}
